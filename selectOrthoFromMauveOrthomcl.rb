@@ -1,0 +1,170 @@
+#! /bin/env ruby
+
+
+require "getoptlong"
+require "bio"
+
+require "Dir"
+
+
+#######################################################################
+orthomcl_file = nil
+mauve_file = nil
+pattern = nil
+seq_files = Array.new
+prefixes = Array.new
+group_size_min = nil
+group_size_max = nil
+mauve_size_min = nil
+mauve_size_max = nil
+outdir = nil
+is_force = false
+is_output = true
+
+seq_objs = Hash.new
+prefix_rela = Hash.new
+
+
+#######################################################################
+def read_mauve(mauve_file)
+  mauve_rela = Hash.new
+  File.open(mauve_file, 'r').each_line do |line|
+    #0:SACI_RS03420:575816-576373	2:STK_RS01680:318927-319484
+    line.chomp!
+    line_arr = line.split("\t")
+    genes = line_arr.map{|item|item.split(':')[1]}
+    line_arr.each do |item|
+      item_arr = item.split(':')
+      gene = item_arr[1]
+      mauve_rela[gene] = genes.select{|i|i if i != gene}
+    end
+  end
+  return(mauve_rela)
+end
+
+
+def get_orthomcl(orthomcl_file, mauve_rela, group_size_min, group_size_max, mauve_size_min, mauve_size_max)
+  orthomcl_groups = Array.new
+  in_fh = orthomcl_file == '-' ? STDIN : File.open(orthomcl_file, 'r')
+  in_fh.each_line do |line|
+    temp_rela = Hash.new
+    line.chomp!
+    line_arr = line.split("\t")
+    # criteria
+    next if not (group_size_min .. group_size_max).include?(line_arr.size)
+
+    orgns = line_arr.map{|i|i.split('|')[0]}
+    genes = line_arr.map{|i|i.split('|')[1]}
+    next if orgns.inject(Hash.new(0)) {|hash,word| hash[word] += 1; hash}.values.count{|i|i>1} < 2
+
+    genes.each do |gene|
+      if mauve_rela.include?(gene) and ! mauve_rela[gene].empty?
+        temp_rela[gene] = genes.select{|i|i!=gene}.map{|i|i if mauve_rela[gene].include?(i)}.compact
+      end
+    end
+    # criteria
+    if (mauve_size_min .. mauve_size_max).include?(temp_rela.size)
+      orthomcl_groups << genes
+    end
+  end
+  in_fh.close if orthomcl_file != '-'
+  return(orthomcl_groups)
+end
+
+
+def read_seq(seq_file, prefix)
+  seq_objs = Hash.new
+  prefix_rela = Hash.new
+  Bio::FlatFile.open(seq_file).each_entry do |f|
+    seq_name = f.definition
+    prefix_rela[seq_name] = prefix
+    seq_objs[seq_name] = f
+  end
+  return([seq_objs, prefix_rela])
+end
+
+
+def output_seq(orthomcl_groups, seq_objs, prefix_rela, outdir)
+  orthomcl_groups.each_with_index do |orthomcl_group, index|
+    outfile = File.join([outdir, (index+1).to_s+".fas"])
+    out_aln = File.join([outdir, (index+1).to_s+".aln"])
+    out_fh = File.open(outfile, 'w')
+    orthomcl_group.each do |gene|
+      p gene if not prefix_rela.include?(gene)
+      out_fh.puts ">" + prefix_rela[gene] + '|' + gene
+      out_fh.puts seq_objs[gene].seq
+    end
+    out_fh.close
+    `mafft --quiet #{outfile} > #{out_aln}`
+  end
+end
+
+
+#######################################################################
+opts = GetoptLong.new(
+  ['--orthomcl', GetoptLong::REQUIRED_ARGUMENT],
+  ['--mauve', GetoptLong::REQUIRED_ARGUMENT],
+  ['--pattern', GetoptLong::REQUIRED_ARGUMENT],
+  ['--seq', GetoptLong::REQUIRED_ARGUMENT],
+  ['--prefix', GetoptLong::REQUIRED_ARGUMENT],
+  ['--group_size', GetoptLong::REQUIRED_ARGUMENT],
+  ['--mauve_size', GetoptLong::REQUIRED_ARGUMENT],
+  ['--outdir', GetoptLong::REQUIRED_ARGUMENT],
+  ['--force', GetoptLong::NO_ARGUMENT],
+  ['--no_output', GetoptLong::NO_ARGUMENT],
+)
+
+
+opts.each do |opt, value|
+  case opt
+    when "--orthomcl"
+      orthomcl_file = value
+    when "--mauve"
+      mauve_file = value
+    when "--pattern"
+      pattern = value
+    when "--seq"
+      seq_files << value.split(',')
+    when "--prefix"
+      prefixes << value.split(',')
+    when "--group_size"
+      group_size_min, group_size_max = value.split(',').map{|i|i.to_i}
+    when "--mauve_size"
+      mauve_size_min, mauve_size_max = value.split(',').map{|i|i.to_i}
+    when "--outdir"
+      outdir = value
+    when "--force"
+      is_force = true
+    when "--no_output"
+      is_output = false
+  end
+end
+
+
+seq_files.flatten!
+prefixes.flatten!
+
+if not [group_size_min, group_size_max, mauve_size_min, mauve_size_max].select{|i|i.nil?}.empty?
+  puts "group_size and mauve_size have to be given! Exiting ......"
+  exit
+end 
+
+mkdir_with_force(outdir, is_force) if is_output
+
+
+#######################################################################
+seq_files.each_with_index do |seq_file, index|
+  prefix = prefixes[index]
+  arr = read_seq(seq_file, prefix)
+  seq_objs.merge!(arr[0])
+  prefix_rela.merge!(arr[1])
+end
+
+mauve_rela = read_mauve(mauve_file)
+
+orthomcl_groups = get_orthomcl(orthomcl_file, mauve_rela, group_size_min, group_size_max, mauve_size_min, mauve_size_max)
+puts orthomcl_groups.size
+
+output_seq(orthomcl_groups, seq_objs, prefix_rela, outdir) if is_output
+
+

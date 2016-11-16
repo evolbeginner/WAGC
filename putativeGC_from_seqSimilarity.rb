@@ -102,13 +102,6 @@ def parse_tree_file(tree_file, bootstrap_min, mauve_rela, mauve_size_min, is_no_
   tree = treeio.next_entry.tree
   bootstraps = tree.nodes.map{|node|node.bootstrap}.compact
   bootstrap_style = nil
-  if not is_no_bootstrap
-    if bootstraps.max <= 1
-      bootstrap_style = "FastTree"
-    else
-      bootstrap_style = "Newick"
-    end
-  end
 
   file_corename = get_corename_of_file(tree_file)
   tree.nodes.each do |node|
@@ -126,13 +119,22 @@ def parse_tree_file(tree_file, bootstrap_min, mauve_rela, mauve_size_min, is_no_
 
     if not bootstrap_min.nil?
       ;
-    elsif bootstrap_style == "FastTree"
-      bootstrap_min = 0.9
-    elsif bootstrap_style == "Newick"
-      bootstrap_min = 70
     else
-      puts "bootstrap error! Exiting ......"
-      exit
+      if not is_no_bootstrap
+        if bootstraps.max <= 1
+          bootstrap_style = "FastTree"
+        else
+          bootstrap_style = "Newick"
+        end
+      end
+      if bootstrap_style == "FastTree"
+        bootstrap_min = 0.9
+      elsif bootstrap_style == "Newick"
+        bootstrap_min = 70
+      else
+        puts "bootstrap error! Exiting ......"
+        exit
+      end
     end
     next if parent_node.bootstrap < bootstrap_min
 

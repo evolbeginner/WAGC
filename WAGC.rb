@@ -20,6 +20,7 @@ cpu = 2
 is_force = false
 is_raxml = true
 is_FastTree = true
+bootstrap = nil
 
 seq_objs = Hash.new
 
@@ -64,10 +65,13 @@ def get_likelihood(infile)
 end
 
 
-def run_raxml(infile, topo_file, aln_outdir, wholeMolecule_tree_outdir, subseq_tree_outdir, cpu=2)
+def run_raxml(infile, topo_file, aln_outdir, wholeMolecule_tree_outdir, subseq_tree_outdir, cpu=2, bootstrap=nil)
   obs_path_to_wholeMolecule_tree_outdir = Pathname.new(wholeMolecule_tree_outdir).realpath
-  #`#{RAxML_prog} -T #{cpu} -s #{infile} -m GTRGAMMA -f a -w #{obs_path_to_wholeMolecule_tree_outdir} -n wholeMolecule -p 123 -x 123 -N 100`
-  `#{RAxML_prog} -T #{cpu} -s #{infile} -m GTRGAMMA -f d -w #{obs_path_to_wholeMolecule_tree_outdir} -n wholeMolecule -p 123`
+  if bootstrap.nil?
+    `#{RAxML_prog} -T #{cpu} -s #{infile} -m GTRGAMMA -f d -w #{obs_path_to_wholeMolecule_tree_outdir} -n wholeMolecule -p 123`
+  else
+    `#{RAxML_prog} -T #{cpu} -s #{infile} -m GTRGAMMA -f a -w #{obs_path_to_wholeMolecule_tree_outdir} -n wholeMolecule -p 123 -x 123 -N #{bootstrap}`
+  end
   topo_file = File.join([obs_path_to_wholeMolecule_tree_outdir, "RAxML_bestTree.wholeMolecule"])
 
   aln_basenames = Array.new
@@ -116,46 +120,66 @@ def output_likelihoods(likelihoods, lnL_outfile)
 end
 
 
+def run_FastTree(aln_outdir, fastTree_outdir)
+  aln_basenames = Array.new
+  counter=0
+  Dir.foreach(aln_outdir) do |aln|
+    next if aln =~ /^\./
+    aln_basenames << aln
+  end
+  aln_basenames.sort_by{|i|$1.to_i if i=~/([^.]+)/}.each do |aln|
+    counter += 1
+    infile = File.join([aln_outdir, counter.to_s+'.aln'])
+    outfile_basename = counter.to_s + ".FastTree.tre"
+    outfile = File.join([fastTree_outdir, outfile_basename])
+    `FastTree -nt -quiet <#{infile} >#{outfile}`
+  end
+end
+
+
 #################################################################
 opts = GetoptLong.new(
-  ["-i", GetoptLong::REQUIRED_ARGUMENT],
-  ["--outdir", GetoptLong::REQUIRED_ARGUMENT],
-  ["--step", GetoptLong::REQUIRED_ARGUMENT],
-  ["--subseq_length", "-l", GetoptLong::REQUIRED_ARGUMENT],
-  ["--topo", GetoptLong::REQUIRED_ARGUMENT],
-  ["--cpu", "--CPU", GetoptLong::REQUIRED_ARGUMENT],
-  ["--force", GetoptLong::NO_ARGUMENT],
-  ["--no_raxml", GetoptLong::NO_ARGUMENT],
-  ["--no_FastTree", GetoptLong::NO_ARGUMENT],
+  ['-i', GetoptLong::REQUIRED_ARGUMENT],
+  ['--outdir', GetoptLong::REQUIRED_ARGUMENT],
+  ['--step', GetoptLong::REQUIRED_ARGUMENT],
+  ['--subseq_length', '-l', GetoptLong::REQUIRED_ARGUMENT],
+  ['--topo', GetoptLong::REQUIRED_ARGUMENT],
+  ['--cpu', '--CPU', GetoptLong::REQUIRED_ARGUMENT],
+  ['--force', GetoptLong::NO_ARGUMENT],
+  ['--no_raxml', GetoptLong::NO_ARGUMENT],
+  ['--no_FastTree', GetoptLong::NO_ARGUMENT],
+  ['--bootstrap', GetoptLong::REQUIRED_ARGUMENT],
 )
 
 
 opts.each do |opt, value|
   case opt
-    when "-i"
+    when '-i'
       infile = value
-    when "--outdir"
+    when '--outdir'
       outdir = value
-    when "--step"
+    when '--step'
       step = value.to_i
-    when "-l", "--subseq_length"
+    when '-l', '--subseq_length'
       subseq_length = value.to_i
-    when "--topo"
+    when '--topo'
       topo_file = value
-    when "--cpu", "--CPU"
+    when '--cpu', '--CPU'
       cpu = value.to_i
-    when "--force"
+    when '--force'
       is_force = true
-    when "--no_raxml"
+    when '--no_raxml'
       is_raxml = false
-    when "--no_FastTree"
+    when '--no_FastTree'
       is_FastTree = false
+    when '--bootstrap'
+      bootstrap = value.to_i
   end
 end
 
 
 if outdir.nil?
-  puts "outdir has to be specified! Exiting ......"
+  puts 'outdir has to be specified! Exiting ......'
   puts
   exit
 end
@@ -186,28 +210,11 @@ seq_objs = read_seq(infile)
 
 output_subseqs(seq_objs, step, subseq_length, aln_outdir)
 
-def run_FastTree(aln_outdir, fastTree_outdir)
-  aln_basenames = Array.new
-  counter=0
-  Dir.foreach(aln_outdir) do |aln|
-    next if aln =~ /^\./
-    aln_basenames << aln
-  end
-  aln_basenames.sort_by{|i|$1.to_i if i=~/([^.]+)/}.each do |aln|
-    counter += 1
-    infile = File.join([aln_outdir, counter.to_s+'.aln'])
-    outfile_basename = counter.to_s + ".FastTree.tre"
-    outfile = File.join([fastTree_outdir, outfile_basename])
-    `FastTree -nt -quiet <#{infile} >#{outfile}`
-  end
-end
-
 run_FastTree(aln_outdir, fastTree_outdir) if is_FastTree
 
-exit if not is_raxml
-
-likelihoods = run_raxml(infile, topo_file, aln_outdir, wholeMolecule_tree_outdir, subseq_tree_outdir, cpu)
-
-output_likelihoods(likelihoods, lnL_outfile)
+if is_raxml
+  likelihoods = run_raxml(infile, topo_file, aln_outdir, wholeMolecule_tree_outdir, subseq_tree_outdir, cpu, bootstrap)
+  output_likelihoods(likelihoods, lnL_outfile)
+end
 
 

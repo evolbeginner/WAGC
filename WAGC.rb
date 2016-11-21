@@ -7,7 +7,7 @@ require "pathname"
 
 
 #################################################################
-RAxML_prog = File.expand_path("~/software/phylo/RAxML_8.0.3/raxmlHPC-PTHREADS")
+RAxML_prog = File.expand_path("~/software/phylo/RAxML_8.2.4/raxmlHPC-PTHREADS")
 
 
 #################################################################
@@ -56,9 +56,8 @@ def get_likelihood(infile)
   likelihood = nil
   File.open(infile, "r").each_line do |line|
     line.chomp!
-    if line =~ /Final ML Optimization Likelihood: ([^ ]+)/ or line =~ /final GAMMA-based Likelihood: ([^ ]+)/
+    if line =~ /Final ML Optimization Likelihood: ([^ ]+)/ or line =~ /final GAMMA-based Likelihood: ([^ ]+)/ or line =~ /^LH after SPRs ([^ ]+)/
       likelihood = $1.to_f
-      break
     end
   end
   return(likelihood)
@@ -96,7 +95,7 @@ def run_raxml(infile, topo_file, aln_outdir, wholeMolecule_tree_outdir, subseq_t
     `#{RAxML_prog} -T #{cpu} -s #{full_path_to_aln} -m GTRGAMMA -f d -w #{obs_path_to_subseq_tree_outdir_per_aln}      -n #{corename} -p 123`
     likelihood_best = get_likelihood(File.join([obs_path_to_subseq_tree_outdir_per_aln, "RAxML_info."+corename]))
     obs_path_to_subseq_tree_outdir_per_aln_topo = Pathname.new(subseq_tree_outdir_per_aln_topo).realpath
-    `#{RAxML_prog} -T 2 -s #{full_path_to_aln} -m GTRGAMMA -f d -w #{obs_path_to_subseq_tree_outdir_per_aln_topo} -n #{corename} -p 123 -g #{topo_file}`
+    `#{RAxML_prog} -T #{cpu} -s #{full_path_to_aln} -m GTRGAMMA -f d -w #{obs_path_to_subseq_tree_outdir_per_aln_topo} -n #{corename} -p 123 -g #{topo_file}`
     likelihood_topo = get_likelihood(File.join([obs_path_to_subseq_tree_outdir_per_aln_topo, "RAxML_info."+corename]))
     likelihoods << [likelihood_best, likelihood_topo]
   end

@@ -12,6 +12,8 @@ orthomcl_file = nil
 mauve_file = nil
 pattern = nil
 seq_files = Array.new
+seq_indir = nil
+seq_file_suffix = nil
 prefixes = Array.new
 group_size_min = nil
 group_size_max = nil
@@ -106,6 +108,8 @@ opts = GetoptLong.new(
   ['--mauve', GetoptLong::REQUIRED_ARGUMENT],
   ['--pattern', GetoptLong::REQUIRED_ARGUMENT],
   ['--seq', GetoptLong::REQUIRED_ARGUMENT],
+  ['--seq_indir', GetoptLong::REQUIRED_ARGUMENT],
+  ['--seq_file_suffix', GetoptLong::REQUIRED_ARGUMENT],
   ['--prefix', GetoptLong::REQUIRED_ARGUMENT],
   ['--group_size', GetoptLong::REQUIRED_ARGUMENT],
   ['--mauve_size', GetoptLong::REQUIRED_ARGUMENT],
@@ -125,6 +129,10 @@ opts.each do |opt, value|
       pattern = value
     when "--seq"
       seq_files << value.split(',')
+    when "--seq_indir"
+      seq_indir = value
+    when '--seq_file_suffix'
+      seq_file_suffix = value
     when "--prefix"
       prefixes << value.split(',')
     when "--group_size"
@@ -141,8 +149,38 @@ opts.each do |opt, value|
 end
 
 
+if not seq_indir.nil? and seq_files.empty? and not seq_file_suffix.nil?
+  Dir.foreach(seq_indir).each do |file_basename|
+    next if file_basename =~ /^\./
+    next if file_basename !~ /#{seq_file_suffix}/
+    seq_files << File.join([seq_indir, file_basename])
+  end
+end
+
+
 seq_files.flatten!
-prefixes.flatten!
+if prefixes.empty?
+  seq_files.each do |seq_file|
+    basename = File.basename(seq_file)
+    basename =~ /^([^.]+)/
+    prefix = $1
+    prefixes << prefix
+  end
+else
+    prefixes.flatten!
+end
+
+
+#######################################################################
+if seq_files.empty?
+  puts "seq_files empty! Exiting ......"
+  exit
+end
+
+if prefixes.empty?
+  puts "prefix not given! Exiting ......"
+  exit
+end
 
 if not [group_size_min, group_size_max, mauve_size_min, mauve_size_max].select{|i|i.nil?}.empty?
   puts "group_size and mauve_size have to be given! Exiting ......"

@@ -13,6 +13,7 @@ coors_included = Array.new
 type = nil
 aln_dir = nil
 gap_prop_cutoff = 0.5
+is_all_site = false
 
 region_info = Hash.new{|h,k|h[k]={}}
 gap_props = Hash.new
@@ -80,6 +81,7 @@ opts = GetoptLong.new(
   ['--type', GetoptLong::REQUIRED_ARGUMENT],
   ['--aln_dir', GetoptLong::REQUIRED_ARGUMENT],
   ['--gap_prop', GetoptLong::REQUIRED_ARGUMENT],
+  ['--all_site', GetoptLong::NO_ARGUMENT],
 )
 
 
@@ -95,6 +97,8 @@ opts.each do |opt, value|
       aln_dir = value
     when '--gap_prop'
       gap_prop_cutoff = value.to_f
+    when '--all_site'
+      is_all_site = true
   end
 end
 
@@ -137,11 +141,16 @@ end
 
 
 region_info.sort.to_h.each_pair do |pair, v1|
-  ranges = get_ranges(v1.sort.to_h.keys, gap_props, gap_prop_cutoff)
-  if not ranges.empty?
+  if is_all_site
     puts pair
-    ranges.each do |range|
-      puts [range[0], range[1].map{|i|i.to_s}.join(','), range[2].map{|i|i.to_s}.join(',')].join("\t")
+    puts v1.sort.to_h.keys.join("\t")
+  else
+    ranges = get_ranges(v1.sort.to_h.keys, gap_props, gap_prop_cutoff)
+    if not ranges.empty?
+      puts pair
+      ranges.each do |range|
+        puts [range[0], range[1].map{|i|i.to_s}.join(','), range[2].map{|i|i.to_s}.join(',')].join("\t")
+      end
     end
   end
 end

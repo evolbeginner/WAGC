@@ -9,6 +9,7 @@ lnL_file = nil
 gc_range_file = nil
 max_lnL_file = nil
 max_num_of_failed = nil
+is_all_site = false
 
 lnLs = Hash.new
 gc_sites = Hash.new
@@ -26,7 +27,7 @@ def read_lnL_file(lnL_file)
 end
 
 
-def read_range_file(range_file)
+def read_range_file(range_file, is_all_site)
   gc_sites = Hash.new
   pair = nil
   File.open(range_file, 'r').each_line do |line|
@@ -35,13 +36,23 @@ def read_range_file(range_file)
     #130-137	130,131,132,133,134,137	130,131,132,133,134
     line.chomp!
     line_arr = line.split("\t")
-    if line_arr.size == 2
-      pair = line
+    if is_all_site
+      if ($. % 2 == 1)
+        pair = line
+      else
+        line_arr.map{|i|i.to_i}.each do |site|
+          gc_sites[site] = nil
+        end
+      end
     else
-      range = line_arr[0]
-      sites = range.split('-')[0]..range.split('-')[1]
-      sites.each do |site|
-        gc_sites[site.to_i] = nil
+      if line_arr.size == 2
+        pair = line
+      else
+        range = line_arr[0]
+        sites = range.split('-')[0]..range.split('-')[1]
+        sites.each do |site|
+          gc_sites[site.to_i] = nil
+        end
       end
     end
   end
@@ -55,6 +66,7 @@ opts = GetoptLong.new(
   ['--gc_range_file', GetoptLong::REQUIRED_ARGUMENT],
   ['--max_lnL_file', GetoptLong::REQUIRED_ARGUMENT],
   ['--max_num_of_failed', GetoptLong::REQUIRED_ARGUMENT],
+  ['--all_site', GetoptLong::NO_ARGUMENT],
 )
 
 opts.each do |opt, value|
@@ -67,6 +79,8 @@ opts.each do |opt, value|
       max_lnL_file = value
     when '--max_num_of_failed'
       max_num_of_failed = value.to_i
+    when '--all_site'
+      is_all_site = true
   end
 end
 
@@ -74,7 +88,7 @@ end
 ############################################################
 lnLs = read_lnL_file(lnL_file)
 
-gc_sites = read_range_file(gc_range_file)
+gc_sites = read_range_file(gc_range_file, is_all_site)
 
 max_lnLs = read_lnL_file(max_lnL_file) if not max_lnL_file.nil?
 

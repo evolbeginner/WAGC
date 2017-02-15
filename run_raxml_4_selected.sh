@@ -98,7 +98,11 @@ for j in `find $pre_raxml_dir -name 'FastTree.gc_range'`; do
 			th_cutoff=6
 		fi
 
-		if [ `ruby $delNullFromRaxml --gc_range_file $pre_raxml_dir/$c/FastTree.gc_range --lnL_file $target_outdir/lnL | wc -l` -eq 0 ]; then
+		for i in `find $target_outdir/tree/subseq/ -regex ".*RAxML_\(fastTree.*\|bestTree.*\)"`; do ruby $putativeGC_from_seqSimilarity --tree $i --mauve $mauve --no_bootstrap; done > $target_outdir/raxml.putative_GC
+		ruby2.1 $detectRegionOfGC -i $target_outdir/raxml.putative_GC --type raxml > $target_outdir/raxml.ori.gc_range
+		ruby2.1 $detectRegionOfGC -i $target_outdir/raxml.putative_GC --type raxml --all_site > $target_outdir/raxml.ori.gc_all_site
+
+		if [ `ruby $delNullFromRaxml --gc_range_file $target_outdir/raxml.ori.gc_all_site --lnL_file $target_outdir/lnL --all_site | wc -l` -eq 0 ]; then
 			continue
 		fi
 
@@ -113,16 +117,19 @@ for j in `find $pre_raxml_dir -name 'FastTree.gc_range'`; do
 			if [ ! -s $simulation_dir/1.aln ]; then continue; fi
 			ruby $WAGC -i $simulation_dir/1.aln --outdir $simulation_dir/simulation_raxml/ --step 5 -l 50 --cpu $cpu --force --no_FastTree >/dev/null;
 			awk 'BEGIN{max=-10}{if($1>max){max=$1}}END{print max}' $simulation_dir/simulation_raxml/lnL  >> $max_lnL_file
-			if [ `ruby $delNullFromRaxml --gc_range_file $pre_raxml_dir/$c/FastTree.gc_range --lnL_file $target_outdir/lnL --max_lnL_file $max_lnL_file --max_num_of_failed $(($th_cutoff-1)) | wc -l` -eq 0 ]; then
+			if [ `ruby $delNullFromRaxml --gc_range_file $target_outdir/raxml.ori.gc_all_site --lnL_file $target_outdir/lnL --max_lnL_file $max_lnL_file --max_num_of_failed $(($th_cutoff-1)) --all_site | wc -l` -eq 0 ]; then
 				break
 			fi
 		done
 
 		lnL_min=`find $target_outdir -name lnL -exec awk 'BEGIN{max=-10}{if($1>max){max=$1}}END{print max}' {} \; | sort -n | tail -n $th_cutoff | head -1`
-		for i in `find $target_outdir/tree/subseq/ -regex ".*RAxML_\(fastTree.*\|bestTree.*\)"`; do ruby $putativeGC_from_seqSimilarity --tree $i --mauve $mauve --no_bootstrap; done > $target_outdir/raxml.putative_GC
 		coors_included=`ruby $getFinalCoors -i $target_outdir/lnL --lnL_min $lnL_min`
-		ruby2.1 $detectRegionOfGC -i $target_outdir/raxml.putative_GC --type raxml > $target_outdir/raxml.ori.gc_range
 		ruby2.1 $detectRegionOfGC -i $target_outdir/raxml.putative_GC --type raxml --coor $coors_included > $target_outdir/raxml.gc_range
+		ruby2.1 $detectRegionOfGC -i $target_outdir/raxml.putative_GC --type raxml --coor $coors_included --all_site > $target_outdir/raxml.gc_all_site
+		
+		tar Jcf $target_outdir/simulation.tar.xz $target_outdir/simulation
+		[ $? -eq 0 ] && rm -rf $target_outdir/simulation
+		
 	fi
 done
 

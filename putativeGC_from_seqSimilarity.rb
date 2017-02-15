@@ -296,7 +296,7 @@ opts.each do |opt, value|
       is_de_prefix = true
     when '--length_min'
       length_min = value.to_i
-    when '--bootstrap_min'
+    when '--bootstrap'
       bootstrap_min = value.to_f
     when '--no_bootstrap'
       is_no_bootstrap = true
